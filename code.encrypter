@@ -1,4 +1,4 @@
-color $rojo --> #FF00F0;
+color $rojo --> #FFFFFF;
 repetir(4) {
     atras();
     izquierda();
