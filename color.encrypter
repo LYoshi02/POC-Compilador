@@ -1,1 +1,12 @@
-lanzarMoneda
+color $rojo --> #FF00F0;
+repetir(4) {
+    atras();
+    izquierda();
+    repetirMientras(lanzarMoneda()) {
+        derecha();
+    }
+    izquierda();
+}
+
+color $azul --> #FFA0A0;
+adelante();
