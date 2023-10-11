@@ -2,9 +2,6 @@ color $rojo --> #FFFFFF;
 repetir(4) {
     atras();
     izquierda();
-    repetirMientras(lanzarMoneda()) {
-        derecha();
-    }
     izquierda();
 }
 

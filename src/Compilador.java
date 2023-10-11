@@ -1,5 +1,6 @@
 
 import com.formdev.flatlaf.FlatIntelliJLaf;
+import compilerTools.CodeBlock;
 import compilerTools.Directory;
 import compilerTools.ErrorLSSL;
 import compilerTools.Functions;
@@ -246,61 +247,61 @@ public class Compilador extends javax.swing.JFrame {
         gramatica.delete("ESTRUCTURA_CONTROL", 10, "Error sintáctico {}: la estructura de control no está declarada correctamente [#, %]");
 
         /* Eliminacion de paréntesis */
-        gramatica.delete(new String[]{"PARENTESIS_APERTURA", "PARENTESIS_CIERRE"}, 11, 
+        gramatica.delete(new String[]{"PARENTESIS_APERTURA", "PARENTESIS_CIERRE"}, 11,
                 "Error sintáctico {}: el paréntesis [] no está contenido en una agrupación [#, %]");
-        
+
         /* Verificacion de punto y coma al final de una sentencia */
         gramatica.finalLineColumn();
         // Identificadores o variables
         gramatica.group("VARIABLE_PUNTO_COMA", "VARIABLE PUNTO_COMA", true);
-        gramatica.group("VARIABLE_PUNTO_COMA", "VARIABLE", true, 12, 
+        gramatica.group("VARIABLE_PUNTO_COMA", "VARIABLE", true, 12,
                 "Error sintáctico {}: falta el punto y coma al final de la variable [#, %]");
         // Funciones
         gramatica.group("FUNCION_COMPLETA_PUNTO_COMA", "FUNCION_COMPLETA PUNTO_COMA", true);
-        gramatica.group("FUNCION_COMPLETA_PUNTO_COMA", "FUNCION_COMPLETA", 13, 
+        gramatica.group("FUNCION_COMPLETA_PUNTO_COMA", "FUNCION_COMPLETA", 13,
                 "Error sintáctico {}: falta el punto y coma al final de la declaración de función [#, %]");
         gramatica.initialLineColumn();
-        
+
         /* Eliminacion de punto y coma */
         gramatica.delete("PUNTO_COMA", 14, "Error sintáctico {}: el punto y coma no está al final de una sentencia [#, %]");
 
         /* Agrupación de sentencias */
         gramatica.group("SENTENCIAS", "(VARIABLE_PUNTO_COMA | FUNCION_COMPLETA_PUNTO_COMA)+");
-        
+
         gramatica.loopForFunExecUntilChangeNotDetected(() -> {
-            gramatica.group("ESTRUCTURA_CONTROL_COMPLETA_CON_LLAVES", 
+            gramatica.group("ESTRUCTURA_CONTROL_COMPLETA_CON_LLAVES",
                     "ESTRUCTURA_CONTROL_COMPLETA LLAVE_APERTURA (SENTENCIAS)? LLAVE_CIERRE", true);
             gramatica.group("SENTENCIAS", "(SENTENCIAS | ESTRUCTURA_CONTROL_COMPLETA_CON_LLAVES)+");
         });
-        
+
         /* Estructuras de funcion incompletas */
         gramatica.loopForFunExecUntilChangeNotDetected(() -> {
             gramatica.initialLineColumn();
             gramatica.group("ESTRUCTURA_CONTROL_COMPLETA_CON_LLAVES", "ESTRUCTURA_CONTROL_COMPLETA (SENTENCIAS)? LLAVE_CIERRE",
                     true, 15, "Error sintáctico {}: falta la llave de apertura en la estructura de control [#, %]");
-            
+
             gramatica.finalLineColumn();
             gramatica.group("ESTRUCTURA_CONTROL_COMPLETA_CON_LLAVES", "ESTRUCTURA_CONTROL_COMPLETA LLAVE_APERTURA SENTENCIAS",
                     true, 16, "Error sintáctico {}: falta la llave de cierre en la estructura de control [#, %]");
-            
+
             gramatica.group("SENTENCIAS", "(SENTENCIAS | ESTRUCTURA_CONTROL_COMPLETA_CON_LLAVES)");
         });
-        
+
         /* Eliminacion de llaves */
-        gramatica.delete(new String[]{"LLAVE_APERTURA", "LLAVE_CIERRE"}, 17, 
+        gramatica.delete(new String[]{"LLAVE_APERTURA", "LLAVE_CIERRE"}, 17,
                 "Error sintáctico {}: la llave [] no está contenida en una agrupación [#, %]");
-          
+
         gramatica.show();
     }
 
     private void semanticAnalysis() {
         HashMap<String, String> identDataType = new HashMap<>();
-        
+
         identDataType.put("color", "COLOR");
-        identDataType.put("numero", "NUMERO");        
-        
-        for (Production id: identProd) {
-            if(!identDataType.get(id.lexemeRank(0)).equals(id.lexicalCompRank(-1))) {
+        identDataType.put("numero", "NUMERO");
+
+        for (Production id : identProd) {
+            if (!identDataType.get(id.lexemeRank(0)).equals(id.lexicalCompRank(-1))) {
                 errors.add(new ErrorLSSL(1, "Error semántico {}: valor no compatible con el tipo de dato [#, %]", id, true));
             } else if (id.lexicalCompRank(-1).equals("COLOR") && !id.lexemeRank(-1).matches("#[0-9a-fA-F]+")) {
                 errors.add(new ErrorLSSL(2, "Error semántico {}: el color no es un número hexadecimal [#, %]", id, false));
@@ -555,10 +556,59 @@ public class Compilador extends javax.swing.JFrame {
             if (!errors.isEmpty()) {
                 JOptionPane.showMessageDialog(null, "No se pudo ejecutar el codigo ya que se encontró uno o más");
             } else {
-
+                CodeBlock codeBlock = Functions.splitCodeInCodeBlocks(tokens, "{", "}", ";");
+                ArrayList<String> blocksOfCode = codeBlock.getBlocksOfCodeInOrderOfExec();
+                executeCode(blocksOfCode, 1);
             }
         }
     }//GEN-LAST:event_btnEjecutarActionPerformed
+
+    private void executeCode(ArrayList<String> blocksOfCode, int repeats) {
+        for (int i = 1; i <= repeats; i++) {
+            int repeatCode = -1;
+            for (int j = 0; j < blocksOfCode.size(); j++) {
+                String blockOfCode = blocksOfCode.get(j);
+                if (repeatCode != -1) {
+                    int[] posicionMarcador = CodeBlock.getPositionOfBothMarkers(blocksOfCode, blockOfCode);
+                    executeCode(new ArrayList<>(blocksOfCode.subList(posicionMarcador[0], posicionMarcador[1])), repeatCode);
+                    repeatCode = -1;
+                    j = posicionMarcador[1];
+                } else {
+                    String[] sentences = blockOfCode.split(";");
+                    for (String sentence : sentences) {
+                        sentence = sentence.trim();
+                        if (sentence.startsWith("pintar")) {
+                            String parametro;
+                            if (sentence.contains("$")) {
+                                parametro = identificadores.get(sentence.substring(9, sentence.length() - 2));
+                            } else {
+                                parametro = sentence.substring(9, sentence.length() - 2);
+                            }
+                            System.out.println("Pintando de color " + parametro + "...");
+                        } else if (sentence.startsWith("izquierda")) {
+                            System.out.println("Moviendose a la izquierda...");
+                        } else if (sentence.startsWith("derecha")) {
+                            System.out.println("Moviendose a la derecha...");
+                        } else if (sentence.startsWith("adelante")) {
+                            System.out.println("Moviendose hacia adelante...");
+                        } else if (sentence.startsWith("atras")) {
+                            System.out.println("Moviendose hacia atras...");
+                        } else if (sentence.contains("-->")) {
+                            System.out.println("Declarando identificador...");
+                        } else if (sentence.startsWith("repetir")) {
+                            String parametro;
+                            if (sentence.contains("$")) {
+                                parametro = identificadores.get(sentence.substring(10, sentence.length() - 2));
+                            } else {
+                                parametro = sentence.substring(10, sentence.length() - 2);
+                            }
+                            repeatCode = Integer.parseInt(parametro);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     private void jtpCodeKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jtpCodeKeyPressed
         boolean isTabKeyPressed = evt.getKeyCode() == KeyEvent.VK_TAB;
